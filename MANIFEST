@@ -1,0 +1,19 @@
+Changes
+Makefile.PL
+MANIFEST
+README
+
+t/001use.t
+t/002basic.t
+t/003user.t
+t/004env.t
+t/005lib.t
+t/006before.t
+t/090pod.t                               Tests POD for errors
+
+t/P.pm                                   Dummy module used in tests (002-006)
+t/Q.pm                                   "
+t/R.pm                                   "
+
+lib/Devel/Hide.pm
+META.yml                                 Module meta-data
