@@ -1,11 +1,11 @@
 
 package Devel::Hide;
 
-use 5.008;
+use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.00_01';
+our $VERSION = '0.00_02';
 
 # TO DO:
 # * write Changes, Makefile.PL, README
@@ -99,16 +99,32 @@ BEGIN {
     @HIDDEN = _as_fn(@HIDDEN); # just filenames
   }
 
-  #warn __PACKAGE__, " hides ", join(', ', @HIDDEN), "\n" if $VERBOSE && @HIDDEN;
+  if ($] >= 5.008) {
+      *_scalar_as_io = \&_scalar_as_io8;
+  } else {
+      *_scalar_as_io = \&_scalar_as_io6;
+  }
 
 }
 
 # works for perl 5.8.0, uses in-core files
-sub _scalar_as_io {
+sub _scalar_as_io8 {
   open my $io, '<', \$_[0]
     or die $!; # this should not happen (perl 5.8 should support this)
   return $io;
 }
+
+# works for perl >= 5.6.1, uses File::Temp
+sub _scalar_as_io6 {
+  my $scalar = shift;
+  require File::Temp;
+  my $io = File::Temp::tempfile();
+  print $io $scalar;
+  seek $io, 0, 0;
+  return $io
+}
+
+# _scalar_as_io is one of the two sub's above
 
 sub _denial {
   my $filename = shift;
