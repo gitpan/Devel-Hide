@@ -5,7 +5,7 @@ use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.00_02';
+our $VERSION = '0.0003';
 
 # TO DO:
 # * write Changes, Makefile.PL, README
@@ -292,7 +292,7 @@ Adriano R. Ferreira, E<lt>ferreira@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005 by Adriano R. Ferreira
+Copyright (C) 2005-2006 by Adriano R. Ferreira
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

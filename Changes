@@ -1,5 +1,10 @@
 Revision history for Perl extension Devel::Hide.
 
+0.0003  Wed Oct 4 2006
+        - not a development version anymore
+        - get rid of warning at "t/003user.t"
+        - new test "t/098pod-coverage.t"
+
 0.00_02 Sun Sep 25 2005
         - lifted the requirement on perl 5.8:
           now 5.6.1 will do (because it may
