@@ -1,7 +1,7 @@
 ---
 # http://module-build.sourceforge.net/META-spec.html
 name:         Devel-Hide
-version:      0.0003
+version:      0.0004
 version_from: lib/Devel/Hide.pm
 author:
   - Adriano Ferreira <ferreira@cpan.org>

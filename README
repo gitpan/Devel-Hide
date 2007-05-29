@@ -1,4 +1,4 @@
-Devel-Hide version 0.0003
+Devel-Hide version 0.0004
 ==========================
 
 Simple tool for developers which allows to hide
@@ -31,7 +31,7 @@ also for testing - the POD part.
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2005-2006 by Adriano R. Ferreira
+Copyright (C) 2005-2007 by Adriano R. Ferreira
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

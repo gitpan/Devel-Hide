@@ -5,17 +5,12 @@ use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.0003';
+our $VERSION = '0.0004';
 
-# TO DO:
-# * write Changes, Makefile.PL, README
-# * write unimport() sub
-# * tweak the instant of emiting the warning message (Devel::Hide hides ...)
-# * write decent docs
+use vars qw( @HIDDEN $VERBOSE );
 
-# maybe I should change the our variables to "use vars qw()"
-
-use vars qw(@HIDDEN $VERBOSE);
+# a map ( $hidden_file => 1 ) to speed determining if a module/file is hidden
+my %IS_HIDDEN;
 
 # tells whether "Devel::Hide hides ..." was already emitted
 my $WARNING;
@@ -83,8 +78,34 @@ TO DO: The module names are converted to filenames.
 =cut
 
 sub split_mod {
-  my @mods = split /\s+/, shift;
+  my @mods = split ' ', shift; 
   return _as_fn @mods;
+}
+# NOTE. "split ' ', $s" is special. Read "perldoc -f split".
+
+
+=begin private
+
+=item B<_core_modules>
+
+  @core = _core_modules($perl_version);
+
+Returns the list of core modules according to
+Module::CoreList.
+
+!!! UNUSED BY NOW
+
+It is aimed to expand the tag ':core' into all core
+modules in the current version of Perl ($]).
+Requires Module::CoreList.
+
+=end private
+
+=cut
+
+sub _core_modules {
+    require Module::CoreList;
+    return Module::CoreList->find_modules( qr/.*/, shift );
 }
 
 BEGIN {
@@ -99,11 +120,7 @@ BEGIN {
     @HIDDEN = _as_fn(@HIDDEN); # just filenames
   }
 
-  if ($] >= 5.008) {
-      *_scalar_as_io = \&_scalar_as_io8;
-  } else {
-      *_scalar_as_io = \&_scalar_as_io6;
-  }
+  $IS_HIDDEN{$_}++ for @HIDDEN;
 
 }
 
@@ -124,6 +141,16 @@ sub _scalar_as_io6 {
   return $io
 }
 
+BEGIN {
+
+  if ($] >= 5.008) {
+      *_scalar_as_io = \&_scalar_as_io8;
+  } else {
+      *_scalar_as_io = \&_scalar_as_io6;
+  }
+
+}
+
 # _scalar_as_io is one of the two sub's above
 
 sub _denial {
@@ -136,7 +163,8 @@ sub _denial {
 
 sub _is_hidden {
   my $filename = shift;
-  return scalar grep { $_ eq $filename } @HIDDEN
+  #return scalar grep { $_ eq $filename } @HIDDEN
+  return $IS_HIDDEN{$filename};
 }
 
 sub _carp {
@@ -150,9 +178,9 @@ sub _inc_hook {
   _carp() unless $WARNING;
 
   if (_is_hidden($filename)) {
-    return _denial($filename);
+    return _denial($filename); # stop right here, with error
   } else {
-    return undef;
+    return undef; # go on with the search
   }
 }
 
@@ -160,8 +188,23 @@ use lib (\&_inc_hook);
 
 sub import {
   shift;
-  push @HIDDEN, _as_fn(@_) if @_
+  if ( @_ ) {
+    #push @HIDDEN, _as_fn(@_);
+    for ( _as_fn(@_) ) {
+        $IS_HIDDEN{$_}++;
+    }
+  }
+
 }
+
+# TO DO:
+# * rewrite Makefile.PL (META.yml should be auto-generated)
+# * improve README
+# * write unimport() sub
+# * tweak the instant of emiting the warning message (Devel::Hide hides ...)
+# * write decent docs
+# * refactor private function names
+# * reformat the code
 
 1;
 
@@ -245,7 +288,7 @@ the hidden list:
 * environment variable DEVEL_HIDE_PM
 * import()
 
-
+=head2 CAVEATS
 
 There is some interaction between C<lib> and this module
 
@@ -292,7 +335,7 @@ Adriano R. Ferreira, E<lt>ferreira@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2006 by Adriano R. Ferreira
+Copyright (C) 2005-2007 by Adriano R. Ferreira
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
