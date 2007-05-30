@@ -17,4 +17,4 @@ t/Q.pm                                   "
 t/R.pm                                   "
 
 lib/Devel/Hide.pm
-META.yml                                 Module meta-data
+META.yml                                 Module meta-data (added by MakeMaker)

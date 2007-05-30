@@ -5,28 +5,19 @@ use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.0004';
+our $VERSION = '0.0005';
 
+# blech! package variables
 use vars qw( @HIDDEN $VERBOSE );
 
 # a map ( $hidden_file => 1 ) to speed determining if a module/file is hidden
 my %IS_HIDDEN;
 
-# tells whether "Devel::Hide hides ..." was already emitted
-my $WARNING;
-
-# $ENV{DEVEL_HIDE_PM} is split in ' '
-# as well as @HIDDEN it accepts Module::Module as well as File/Names.pm
-
-# if (m+(/|\.)+) -> filename (has slash or dot)
-# if (/::/) -> module         =~ s|::|/|g;    .= '.pm'
-# if (/^(\w+::)*\w+$/) -> module
-
 =begin private
 
-=item B<_to_fn>
+=item B<_to_filename>
 
-  $fn = _to_fn($pm)
+    $fn = _to_filename($pm);
 
 Turns a Perl module name (like 'A' or 'P::Q') into
 a filename ("A.pm", "P/Q.pm").
@@ -35,60 +26,142 @@ a filename ("A.pm", "P/Q.pm").
 
 =cut
 
-sub _to_fn {
-  my $pm = shift;
-  $pm =~ s|::|/|g; $pm .= '.pm';
-  return $pm
+sub _to_filename {
+    my $pm = shift;
+    $pm =~ s|::|/|g;
+    $pm .= '.pm';
+    return $pm;
 }
 
 =begin private
 
 =item B<_as_fn>
 
-  @fn = _as_fn(@args)
-  @fn = _as_fn(qw(A.pm X B/C.pm File::Spec)) # returns qw(A.pm X.pm B/C.pm File/Spec.pm)
+    @fn = _as_fn(@args);
+    @fn = _as_fn(qw(A.pm X B/C.pm File::Spec)); # returns qw(A.pm X.pm B/C.pm File/Spec.pm)
 
 Copies the argument list, turning what looks like
 a Perl module name to filenames and leaving everything
 else as it is. To look like a Perl module name is
-to match /^(\w+::)*\w+$/.
+to match C< /^(\w+::)*\w+$/ >.
 
 =end private
 
 =cut
 
 sub _as_fn {
-  my @args = @_;
-  my @ans;
-  for (@args) {
-    push @ans, /^(\w+::)*\w+$/ ? _to_fn($_) : $_;
-  }
-  return @ans;
+    return map { /^(\w+::)*\w+$/ ? _to_filename($_) : $_ } @_;
 }
 
-=begin private
+BEGIN {
 
-=item B<split_mod>
+    unless ( defined $VERBOSE ) { # unless user-defined elsewhere, set default
+        $VERBOSE
+            = defined $ENV{DEVEL_HIDE_VERBOSE} ? $ENV{DEVEL_HIDE_VERBOSE} : 1;
+    }
 
-Splits a list of filenames or module names separated by spaces.
-TO DO: The module names are converted to filenames.
-
-=end private
-
-=cut
-
-sub split_mod {
-  my @mods = split ' ', shift; 
-  return _as_fn @mods;
 }
-# NOTE. "split ' ', $s" is special. Read "perldoc -f split".
 
+# Pushes a list to the set of hidden modules/filenames
+# warns about the modules which could not be hidden
+# and about the ones that were successfully hidden (if $VERBOSE)
+#
+# It works as a batch producing warning messages
+# at each invocation (when appropriate).
+#
+sub _push_hidden {
+
+    return unless @_;
+
+    my @too_late;
+    for ( _as_fn(@_) ) {
+        if ( $INC{$_} ) {
+            push @too_late, $_;
+        } else {
+            $IS_HIDDEN{$_}++;
+        }
+    }
+    if ( $VERBOSE && @too_late ) {
+        warn __PACKAGE__, ": Too late to hide ", join(', ', @too_late), "\n";
+    }
+    if ( $VERBOSE && keys %IS_HIDDEN ) {
+        warn __PACKAGE__, " hides ", join( ', ', sort keys %IS_HIDDEN ), "\n"
+    }
+
+}
+
+# $ENV{DEVEL_HIDE_PM} is split in ' '
+# as well as @HIDDEN it accepts Module::Module as well as File/Names.pm
+
+BEGIN {
+
+    unless ( defined @HIDDEN ) {  # unless user-defined elsewhere, set default
+        if ( $ENV{DEVEL_HIDE_PM} ) {
+            _push_hidden( split( ' ', $ENV{DEVEL_HIDE_PM} ) );
+            # NOTE. "split ' ', $s" is special. Read "perldoc -f split".
+        }
+    }
+    else {
+        _push_hidden( @HIDDEN );
+    }
+    # NOTE. @HIDDEN is not changed anymore
+
+}
+
+# works for perl 5.8.0, uses in-core files
+sub _scalar_as_io8 {
+    open my $io, '<', \$_[0]
+        or die $!;    # this should not happen (perl 5.8 should support this)
+    return $io;
+}
+
+# works for perl >= 5.6.1, uses File::Temp
+sub _scalar_as_io6 {
+    my $scalar = shift;
+    require File::Temp;
+    my $io = File::Temp::tempfile();
+    print $io $scalar;
+    seek $io, 0, 0;
+    return $io;
+}
+
+BEGIN {
+
+    *_scalar_as_io = ( $] >= 5.008 ) ? \&_scalar_as_io8 : \&_scalar_as_io6;
+    # _scalar_as_io is one of the two sub's above
+
+}
+
+sub _dont_load {
+    my $filename = shift;
+    my $oops;
+    my $hidden_by = $VERBOSE ? "hidden" : "hidden by " . __PACKAGE__;
+    $oops = qq{die "Can't locate $filename ($hidden_by)\n"};
+    return _scalar_as_io($oops);
+}
+
+sub _is_hidden {
+    my $filename = shift;
+    return $IS_HIDDEN{$filename};
+}
+
+sub _inc_hook {
+    my ( $coderef, $filename ) = @_;
+    if ( _is_hidden($filename) ) {
+        return _dont_load($filename);    # stop right here, with error
+    }
+    else {
+        return undef;                 # go on with the search
+    }
+}
+
+use lib ( \&_inc_hook );
 
 =begin private
 
 =item B<_core_modules>
 
-  @core = _core_modules($perl_version);
+    @core = _core_modules($perl_version);
 
 Returns the list of core modules according to
 Module::CoreList.
@@ -104,107 +177,40 @@ Requires Module::CoreList.
 =cut
 
 sub _core_modules {
-    require Module::CoreList;
+    require Module::CoreList; # XXX require 2.05 or newer
     return Module::CoreList->find_modules( qr/.*/, shift );
 }
 
-BEGIN {
-
-  unless (defined $VERBOSE) { # unless user-defined elsewhere, set default
-    $VERBOSE = defined $ENV{DEVEL_HIDE_VERBOSE} ? $ENV{DEVEL_HIDE_VERBOSE} : 1;
-  }
-
-  unless (defined @HIDDEN) { # unless user-defined elsewhere, set default
-    push @HIDDEN, split_mod($ENV{DEVEL_HIDE_PM}) if $ENV{DEVEL_HIDE_PM};
-  } else {
-    @HIDDEN = _as_fn(@HIDDEN); # just filenames
-  }
-
-  $IS_HIDDEN{$_}++ for @HIDDEN;
-
-}
-
-# works for perl 5.8.0, uses in-core files
-sub _scalar_as_io8 {
-  open my $io, '<', \$_[0]
-    or die $!; # this should not happen (perl 5.8 should support this)
-  return $io;
-}
-
-# works for perl >= 5.6.1, uses File::Temp
-sub _scalar_as_io6 {
-  my $scalar = shift;
-  require File::Temp;
-  my $io = File::Temp::tempfile();
-  print $io $scalar;
-  seek $io, 0, 0;
-  return $io
-}
-
-BEGIN {
-
-  if ($] >= 5.008) {
-      *_scalar_as_io = \&_scalar_as_io8;
-  } else {
-      *_scalar_as_io = \&_scalar_as_io6;
-  }
-
-}
-
-# _scalar_as_io is one of the two sub's above
-
-sub _denial {
-  my $filename = shift;
-  my $oops;
-  my $hidden_by = $VERBOSE ? "hidden" : "hidden by " . __PACKAGE__;
-  $oops = qq{die "Can't locate $filename ($hidden_by)\n"};
-  return _scalar_as_io($oops);
-}
-
-sub _is_hidden {
-  my $filename = shift;
-  #return scalar grep { $_ eq $filename } @HIDDEN
-  return $IS_HIDDEN{$filename};
-}
-
-sub _carp {
-  warn __PACKAGE__, " hides ", join(', ', @HIDDEN), "\n" if $VERBOSE && @HIDDEN;
-  $WARNING++;
-}
-
-sub _inc_hook {
-  my ($coderef, $filename) = @_;
-
-  _carp() unless $WARNING;
-
-  if (_is_hidden($filename)) {
-    return _denial($filename); # stop right here, with error
-  } else {
-    return undef; # go on with the search
-  }
-}
-
-use lib (\&_inc_hook);
-
 sub import {
-  shift;
-  if ( @_ ) {
-    #push @HIDDEN, _as_fn(@_);
-    for ( _as_fn(@_) ) {
-        $IS_HIDDEN{$_}++;
+    shift;
+    if (@_) {
+        _push_hidden(@_);
     }
-  }
 
 }
 
 # TO DO:
-# * rewrite Makefile.PL (META.yml should be auto-generated)
-# * improve README
 # * write unimport() sub
-# * tweak the instant of emiting the warning message (Devel::Hide hides ...)
 # * write decent docs
 # * refactor private function names
-# * reformat the code
+
+
+=begin private
+
+perl -MDevel::Hide=!:core -e script.pl # hide all non-core modules
+perl -MDevel::Hide=M,!N -e script.pl  # hide all modules but N plus M
+
+how to implement
+
+%IS_HIDDEN
+%IS_EXCEPTION       if there is an exception, all but the set of exceptions are to be hidden
+                           plus the set of hidden modules
+
+          :core(5.8) 
+          :core      synonym to    :core($])
+
+
+=end private
 
 1;
 
@@ -216,25 +222,25 @@ Devel::Hide - Forces the unavailability of specified Perl modules (for testing)
 
 =head1 SYNOPSIS
 
-  use Devel::Hide qw(Module/ToHide.pm);
-  require Module::ToHide; # fails 
+    use Devel::Hide qw(Module/ToHide.pm);
+    require Module::ToHide; # fails 
 
-  use Devel::Hide qw(Test::Pod Test::Pod::Coverage);
-  require Test::More; # ok
-  require Test::Pod 1.18; # fails
+    use Devel::Hide qw(Test::Pod Test::Pod::Coverage);
+    require Test::More; # ok
+    require Test::Pod 1.18; # fails
 
 Other common usage patterns:
 
-  $ perl -MDevel::Hide=Module::ToHide Makefile.PL
+    $ perl -MDevel::Hide=Module::ToHide Makefile.PL
 
-  bash$ PERL5OPT=MDevel::Hide
-  bash$ DEVEL_HIDE_PM='Module::Which Test::Pod'
-  bash$ export PERL5OPT DEVEL_HIDE_PM
-  bash$ perl Makefile.PL
+    bash$ PERL5OPT=MDevel::Hide
+    bash$ DEVEL_HIDE_PM='Module::Which Test::Pod'
+    bash$ export PERL5OPT DEVEL_HIDE_PM
+    bash$ perl Makefile.PL
 
 outputs (like blib)
 
-  Devel::Hide hides Module::Which, Test::Pod, etc.
+    Devel::Hide hides Module::Which, Test::Pod, etc.
 
 =head1 DESCRIPTION
 
@@ -244,7 +250,7 @@ specified files/modules are installed or not).
 
 They I<die> with a message like:
 
-  Can't locate Module/ToHide.pm (hidden)
+    Can't locate Module/ToHide.pm (hidden)
 
 The original intent of this module is to allow Perl developers
 to test for alternative behavior when some modules are not
@@ -270,9 +276,6 @@ But you can say:
 
     perl -MDevel::Hide=XML::SAX script_which_uses_xml_simple.pl
 
-    (this needs confirmation)
-
-
 NOTE. This module does not use L<Carp>. As said before,
 denial I<dies>.
 
@@ -284,24 +287,43 @@ the search before they have a chance to be found.
 
 There are three alternative ways to include modules in
 the hidden list: 
-* setting @Devel::Hide::HIDDEN
-* environment variable DEVEL_HIDE_PM
-* import()
+
+=over 4
+
+=item * 
+
+setting @Devel::Hide::HIDDEN
+
+=item * 
+
+environment variable DEVEL_HIDE_PM
+
+=item * 
+
+import()
+
+=back
 
 =head2 CAVEATS
 
 There is some interaction between C<lib> and this module
 
-   use Devel::Hide qw(Module/ToHide.pm);
-   use lib qw(my_lib);
+    use Devel::Hide qw(Module/ToHide.pm);
+    use lib qw(my_lib);
 
 In this case, 'my_lib' enters the include path before
 the Devel::Hide hook and if F<Module/ToHide.pm> is found
 in 'my_lib', it succeeds.
 
-
 Also for modules that were loaded before Devel::Hide,
 C<require> and C<use> succeeds.
+
+Since 0.0005, Devel::Hide warns about modules already loaded.
+
+    $ perl -MDevel::Hide=Devel::Hide -e ''
+    Devel::Hide: Too late to hide Devel/Hide.pm
+
+
 
 
 =head2 EXPORTS

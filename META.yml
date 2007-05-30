@@ -1,18 +1,17 @@
----
-# http://module-build.sourceforge.net/META-spec.html
-name:         Devel-Hide
-version:      0.0004
-version_from: lib/Devel/Hide.pm
+--- #YAML:1.0
+name:                Devel-Hide
+version:             0.0005
+abstract:            Forces the unavailability of specified Perl modules (for testing)
+license:             perl
+generated_by:        ExtUtils::MakeMaker version 6.32
+distribution_type:   module
+requires:     
+    Test::More:                    0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
 author:
-  - Adriano Ferreira <ferreira@cpan.org>
-license: perl
-requires:
-  Test::More: 0
-  #File::Temp: 0 (if $[ < 5.008)
+    - A. R. Ferreira <ferreira@cpan.org>
 recommends:
-  Test::Pod:  1.18
-  Test::Pod::Coverage: 1.04
-installdirs:  site
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.17
+    Test::Pod:                     1.18
+    Test::Pod::Coverage:           1.04
