@@ -5,13 +5,18 @@ use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.0005';
+our $VERSION = '0.0006_01';
 
 # blech! package variables
 use vars qw( @HIDDEN $VERBOSE );
 
 # a map ( $hidden_file => 1 ) to speed determining if a module/file is hidden
 my %IS_HIDDEN;
+
+# whether to hide modules from ...
+my %HIDE_FROM = ( 
+        children => 0, # child processes or not
+);
 
 =begin private
 
@@ -35,10 +40,10 @@ sub _to_filename {
 
 =begin private
 
-=item B<_as_fn>
+=item B<_as_filenames>
 
-    @fn = _as_fn(@args);
-    @fn = _as_fn(qw(A.pm X B/C.pm File::Spec)); # returns qw(A.pm X.pm B/C.pm File/Spec.pm)
+    @fn = _as_filenames(@args);
+    @fn = _as_filenames(qw(A.pm X B/C.pm File::Spec)); # returns qw(A.pm X.pm B/C.pm File/Spec.pm)
 
 Copies the argument list, turning what looks like
 a Perl module name to filenames and leaving everything
@@ -49,7 +54,7 @@ to match C< /^(\w+::)*\w+$/ >.
 
 =cut
 
-sub _as_fn {
+sub _as_filenames {
     return map { /^(\w+::)*\w+$/ ? _to_filename($_) : $_ } @_;
 }
 
@@ -74,20 +79,20 @@ sub _push_hidden {
     return unless @_;
 
     my @too_late;
-    for ( _as_fn(@_) ) {
+    for ( _as_filenames(@_) ) {
         if ( $INC{$_} ) {
             push @too_late, $_;
-        } else {
+        }
+        else {
             $IS_HIDDEN{$_}++;
         }
     }
     if ( $VERBOSE && @too_late ) {
-        warn __PACKAGE__, ": Too late to hide ", join(', ', @too_late), "\n";
+        warn __PACKAGE__, ': Too late to hide ', join( ', ', @too_late ), "\n";
     }
     if ( $VERBOSE && keys %IS_HIDDEN ) {
-        warn __PACKAGE__, " hides ", join( ', ', sort keys %IS_HIDDEN ), "\n"
+        warn __PACKAGE__, ' hides ', join( ', ', sort keys %IS_HIDDEN ), "\n";
     }
-
 }
 
 # $ENV{DEVEL_HIDE_PM} is split in ' '
@@ -95,15 +100,16 @@ sub _push_hidden {
 
 BEGIN {
 
-    unless ( defined @HIDDEN ) {  # unless user-defined elsewhere, set default
-        if ( $ENV{DEVEL_HIDE_PM} ) {
-            _push_hidden( split( ' ', $ENV{DEVEL_HIDE_PM} ) );
-            # NOTE. "split ' ', $s" is special. Read "perldoc -f split".
-        }
+    # unless @HIDDEN was user-defined elsewhere, set default
+    if ( !defined @HIDDEN && $ENV{DEVEL_HIDE_PM} ) {
+        _push_hidden( split q{ }, $ENV{DEVEL_HIDE_PM} );
+
+        # NOTE. "split ' ', $s" is special. Read "perldoc -f split".
     }
     else {
-        _push_hidden( @HIDDEN );
+        _push_hidden(@HIDDEN);
     }
+
     # NOTE. @HIDDEN is not changed anymore
 
 }
@@ -120,14 +126,15 @@ sub _scalar_as_io6 {
     my $scalar = shift;
     require File::Temp;
     my $io = File::Temp::tempfile();
-    print $io $scalar;
-    seek $io, 0, 0;
+    print {$io} $scalar;
+    seek $io, 0, 0;    # rewind the handle
     return $io;
 }
 
 BEGIN {
 
     *_scalar_as_io = ( $] >= 5.008 ) ? \&_scalar_as_io8 : \&_scalar_as_io6;
+
     # _scalar_as_io is one of the two sub's above
 
 }
@@ -135,7 +142,7 @@ BEGIN {
 sub _dont_load {
     my $filename = shift;
     my $oops;
-    my $hidden_by = $VERBOSE ? "hidden" : "hidden by " . __PACKAGE__;
+    my $hidden_by = $VERBOSE ? 'hidden' : 'hidden by ' . __PACKAGE__;
     $oops = qq{die "Can't locate $filename ($hidden_by)\n"};
     return _scalar_as_io($oops);
 }
@@ -151,7 +158,7 @@ sub _inc_hook {
         return _dont_load($filename);    # stop right here, with error
     }
     else {
-        return undef;                 # go on with the search
+        return undef;                    # go on with the search
     }
 }
 
@@ -177,14 +184,31 @@ Requires Module::CoreList.
 =cut
 
 sub _core_modules {
-    require Module::CoreList; # XXX require 2.05 or newer
+    require Module::CoreList;    # XXX require 2.05 or newer
     return Module::CoreList->find_modules( qr/.*/, shift );
+}
+
+# _append_to_perl5opt(@to_be_hidden)
+sub _append_to_perl5opt {
+
+    $ENV{PERL5OPT} = join( ' ',
+        defined($ENV{PERL5OPT}) ? $ENV{PERL5OPT} : (),
+        'MDevel::Hide=' . join(',', @_)
+    );
+
 }
 
 sub import {
     shift;
+    if( @_ && $_[0] eq '-from:children' ) {
+        $HIDE_FROM{children} = 1;
+        shift;
+    }
     if (@_) {
         _push_hidden(@_);
+        if ($HIDE_FROM{children}) {
+            _append_to_perl5opt(@_);
+        }
     }
 
 }
@@ -193,7 +217,7 @@ sub import {
 # * write unimport() sub
 # * write decent docs
 # * refactor private function names
-
+# * RT #25528
 
 =begin private
 
@@ -212,6 +236,8 @@ how to implement
 
 =end private
 
+=cut
+
 1;
 
 __END__
@@ -220,6 +246,7 @@ __END__
 
 Devel::Hide - Forces the unavailability of specified Perl modules (for testing)
 
+
 =head1 SYNOPSIS
 
     use Devel::Hide qw(Module/ToHide.pm);
@@ -227,7 +254,7 @@ Devel::Hide - Forces the unavailability of specified Perl modules (for testing)
 
     use Devel::Hide qw(Test::Pod Test::Pod::Coverage);
     require Test::More; # ok
-    require Test::Pod 1.18; # fails
+    use Test::Pod 1.18; # fails
 
 Other common usage patterns:
 
@@ -241,6 +268,7 @@ Other common usage patterns:
 outputs (like blib)
 
     Devel::Hide hides Module::Which, Test::Pod, etc.
+
 
 =head1 DESCRIPTION
 
@@ -284,7 +312,6 @@ in @INC to get rid of specific modules during require -
 denying they can be successfully loaded and stopping
 the search before they have a chance to be found.
 
-
 There are three alternative ways to include modules in
 the hidden list: 
 
@@ -303,6 +330,13 @@ environment variable DEVEL_HIDE_PM
 import()
 
 =back
+
+Optionally, you can propagate the list of hidden modules to your
+process' child processes, by passing '-from:children' as the
+first option when you use() this module. This works by populating
+C<PERL5OPT>, and is incompatible with Taint mode, as
+explained in L<perlrun>.
+
 
 =head2 CAVEATS
 
@@ -324,8 +358,6 @@ Since 0.0005, Devel::Hide warns about modules already loaded.
     Devel::Hide: Too late to hide Devel/Hide.pm
 
 
-
-
 =head2 EXPORTS
 
 Nothing is exported.
@@ -340,6 +372,8 @@ DEVEL_HIDE_VERBOSE - on by default. If off, supresses
    the initial message which shows the list of hidden modules
    in effect
 
+PERL5OPT - used if you specify '-from:children'
+
 
 =head1 SEE ALSO
 
@@ -347,13 +381,18 @@ L<perldoc -f require>
 
 L<Test::Without::Module>
 
+
 =head1 BUGS
 
 Please report bugs via CPAN RT L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Devel-Hide>.
 
-=head1 AUTHOR
+
+=head1 AUTHORS
 
 Adriano R. Ferreira, E<lt>ferreira@cpan.orgE<gt>
+
+with contributions from David Cantrell E<lt>dcantrell@cpan.orgE<gt>
+
 
 =head1 COPYRIGHT AND LICENSE
 
@@ -362,7 +401,3 @@ Copyright (C) 2005-2007 by Adriano R. Ferreira
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
-
-=cut
-
-1;

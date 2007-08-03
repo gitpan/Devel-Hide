@@ -9,6 +9,7 @@ t/003user.t
 t/004env.t
 t/005lib.t
 t/006before.t
+t/050child-processes.t
 t/090pod.t                               Tests POD for errors
 t/098pod-coverage.t                      Tests for POD coverage
 

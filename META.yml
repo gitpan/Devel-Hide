@@ -1,9 +1,9 @@
 --- #YAML:1.0
 name:                Devel-Hide
-version:             0.0005
+version:             0.0006_01
 abstract:            Forces the unavailability of specified Perl modules (for testing)
 license:             perl
-generated_by:        ExtUtils::MakeMaker version 6.32
+generated_by:        ExtUtils::MakeMaker version 6.36
 distribution_type:   module
 requires:     
     Test::More:                    0

@@ -1,5 +1,11 @@
 Revision history for Perl extension Devel::Hide.
 
+0.0006_01
+        - some POD fixes
+        - new option -from:children makes the selected
+          modules hidden from process children as well
+          (thanks to David Cantrell)
+
 0.0005  Wed May 30 2007
         - code reformatting with perltidy
         - now warns about already loaded modules
@@ -7,6 +13,7 @@ Revision history for Perl extension Devel::Hide.
         - a bit of refactoring to affect code readability
         - side effect: warnings are emitted at compile time
           and at every import call - a hopefully better timing
+        - the package variable @HIDDEN does not change anymore
 
 0.0004  Tue May 29 2007
         - slight implementation change preparing for the big time
