@@ -1,5 +1,9 @@
 Revision history for Perl extension Devel::Hide.
 
+
+0.0007  Mon Nov  5 2007
+        - promoted: no longer a development release
+
 0.0006_01
         - some POD fixes
         - new option -from:children makes the selected
