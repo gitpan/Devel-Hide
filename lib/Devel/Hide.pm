@@ -5,7 +5,7 @@ use 5.006001;
 use strict;
 use warnings;
 
-our $VERSION = '0.0007';
+our $VERSION = '0.0008';
 
 # blech! package variables
 use vars qw( @HIDDEN $VERBOSE );

@@ -1,5 +1,10 @@
 Revision history for Perl extension Devel::Hide.
 
+0.0008  Thu Nov 15 2007
+        - no real code changes
+        - make t/050child-processes.t less clever for
+          Windows' sake: which choked with too long
+          argument and exec()
 
 0.0007  Mon Nov  5 2007
         - promoted: no longer a development release
